@@ -62,9 +62,25 @@ def calc_alpha(mach, phi):
 def calc_forward_phi_gamma_plus(nu_backward, phi_backward, nu_forward):
     return - (nu_backward - phi_backward - nu_forward)
 
+def find_mach_from_Prandtl_Meyer(nu):
+    mach_left = mach_exit
+    mach_right = 10
+    tolerance = 0.0001
+    while (sp.absolute(mach_left - mach_right) >= tolerance):
+        output_mach = (mach_left + mach_right)/2.0
+        step = calc_Prandtl_Meyer_from_Mach(output_mach) - nu
+        print(step)
+        if step == 0.0: 
+            break
+        if step * (calc_Prandtl_Meyer_from_Mach(output_mach) - nu) < tolerance:
+            mach_right = output_mach
+        else:
+            mach_left = output_mach
+    return output_mach
+    
+
 def bisection_step_function(mach, alpha, backward_phi, backward_nu):
     mu = calc_mu_from_Mach(mach)
-    print(mu - alpha)
     return calc_Prandtl_Meyer_from_Mach(mach) - calc_mu_from_Mach(mach) + alpha + backward_phi - backward_nu
 
 def bisection_method(mach_head, mach_tail, tolerance, alpha, backward_phi, backward_nu):
@@ -80,20 +96,25 @@ def bisection_method(mach_head, mach_tail, tolerance, alpha, backward_phi, backw
         else:
             mach_left = output_mach
     mu = calc_mu_from_Mach(output_mach)
-    print('dit wordt een output', output_mach)
     phi = mu - alpha
-    return output_mach, phi
-        
-        
-    
+    nu = calc_Prandtl_Meyer_from_Mach(output_mach)  
+    return output_mach, phi, nu
+ 
 
 # =============================================================================
 # Iteration parameters
 # =============================================================================
 characteristics = 10
-mach_array = sp.zeros([characteristics, characteristics])
-phi_array = sp.zeros([characteristics, characteristics])
-mu_array = sp.zeros([characteristics, characteristics])
+gamma_minus_mach_array_ABC = sp.zeros([characteristics])
+gamma_minus_nu_array_ABC = sp.zeros([characteristics])
+gamma_minus_phi_array_ABC = sp.zeros([characteristics])
+complex_wave_nu_BCE = sp.zeros([characteristics, characteristics])
+complex_wave_phi_BCE = sp.zeros([characteristics, characteristics])
+complex_wave_nu_DFG = sp.zeros([characteristics, characteristics])
+complex_wave_phi_DFG = sp.zeros([characteristics, characteristics])
+
+
+
 # =============================================================================
 # mu_array[0] = calc_mu_from_Mach(mach_exit)
 # =============================================================================
@@ -107,29 +128,47 @@ phi_B = calc_forward_phi_gamma_plus(calc_Prandtl_Meyer_from_Mach(mach_exit), phi
 alpha_0 =  calc_alpha(mach_exit, phi_exit)
 delta_alpha = calc_alpha(mach_B, phi_B) - alpha_0
 
-N = alpha_0 + delta_alpha + delta_alpha / (characteristics) / (delta_alpha / characteristics)
-
-
 for j, alpha in enumerate(sp.arange(
         alpha_0,
         alpha_0 + delta_alpha + delta_alpha / (characteristics),
         delta_alpha / (characteristics - 1)
     )):
     if (j == 0):
-        mach_array[j, 0] = mach_exit
-        phi_array[j, 0] = phi_exit
+        gamma_minus_mach_array_ABC[j] = mach_exit
+        gamma_minus_phi_array_ABC[j] = phi_exit
+        gamma_minus_nu_array_ABC[j] = calc_Prandtl_Meyer_from_Mach(mach_exit)
     else :
-        mach_array[j, 0], phi_array[j, 0] = bisection_method(
-            mach_array[j - 1, 0] if j > 0 else mach_exit,
+        gamma_minus_mach_array_ABC[j], gamma_minus_phi_array_ABC[j], gamma_minus_nu_array_ABC[j] = bisection_method(
+            gamma_minus_mach_array_ABC[j - 1] if j > 0 else mach_exit,
             mach_B, 
             error_tolerance, 
             alpha, 
-            phi_array[j - 1, 0] if j > 0 else phi_exit, 
-            calc_Prandtl_Meyer_from_Mach(mach_array[j - 1, 0] if j > 0 else mach_exit)
+            gamma_minus_phi_array_ABC[j - 1 ] if j > 0 else phi_exit, 
+            calc_Prandtl_Meyer_from_Mach(gamma_minus_mach_array_ABC[j - 1] if j > 0 else mach_exit)
     )
     for i in sp.arange(0, j + 1, 1):
-        x = 2
+        if i == j:
+            complex_wave_nu_BCE[i][j] = gamma_minus_nu_array_ABC[j] + gamma_minus_phi_array_ABC[j]
+        elif i == 0:
+            complex_wave_nu_BCE[i][j] = 0.5*(complex_wave_nu_BCE[i][j-1] + gamma_minus_nu_array_ABC[j]) + 0.5 * (gamma_minus_phi_array_ABC[j] - complex_wave_phi_BCE[i][j-1])
+            complex_wave_phi_BCE[i][j] = 0.5*(complex_wave_phi_BCE[i][j-1] + gamma_minus_phi_array_ABC[j]) + 0.5 * (gamma_minus_nu_array_ABC[j] - complex_wave_nu_BCE[i][j-1])
+        else:
+            complex_wave_nu_BCE[i][j] = 0.5*(complex_wave_nu_BCE[i][j-1] + complex_wave_nu_BCE[i-1][j]) + 0.5 * (complex_wave_phi_BCE[i-1][j] - complex_wave_phi_BCE[i][j-1])
+            complex_wave_phi_BCE[i][j] = 0.5*(complex_wave_phi_BCE[i][j-1] + complex_wave_phi_BCE[i-1][j]) + 0.5 * (complex_wave_nu_BCE[i-1][j] - complex_wave_nu_BCE[i][j-1])
 
+# =============================================================================
+# for j in sp.arange(0, characteristics, 1):
+#     for i in sp.arange(0, j+1, 1):
+#         if i == j:
+#             print(i,j)
+#             print(complex_wave_nu_BCE[i][-1], complex_wave_phi_BCE[i][-1])
+#             complex_wave_nu_DFG[i][j] =  complex_wave_nu_BCE[i][-1] + complex_wave_phi_BCE[i][-1]
+#         elif i == 0:
+#             complex_wave_nu_DFG[i][j] = 0.5*(complex_wave_nu_BCE[i][-1] + complex_wave_nu_DFG[i][j]) + 0.5 * (gamma_minus_phi_array_ABC[j] - complex_wave_phi_BCE[i][-1])
+#             complex_wave_phi_DFG[i][j] = 0.5*(complex_wave_phi_BCE[i][-1] + gamma_minus_phi_array_ABC[j]) + 0.5 * (gamma_minus_nu_array_ABC[j] - complex_wave_nu_BCE[i][-1])
+#         else:
+#             y = 3
+# =============================================================================
 
 
 # =============================================================================
@@ -157,8 +196,4 @@ for j, alpha in enumerate(sp.arange(
 # =============================================================================
 
 
-
-# ==================================    Wrong method to calculate mach B===========================================
-# mach_B = sp.sqrt((1-2**(-(gamma-1)/gamma))/((gamma-1)/2) + mach_exit**2)
-# =============================================================================
 
