@@ -63,26 +63,26 @@ def calc_forward_phi_gamma_plus(nu_backward, phi_backward, nu_forward):
     return - (nu_backward - phi_backward - nu_forward)
 
 def bisection_step_function(mach, alpha, backward_phi, backward_nu):
+    mu = calc_mu_from_Mach(mach)
+    print(mu - alpha)
     return calc_Prandtl_Meyer_from_Mach(mach) - calc_mu_from_Mach(mach) + alpha + backward_phi - backward_nu
 
 def bisection_method(mach_head, mach_tail, tolerance, alpha, backward_phi, backward_nu):
-    print(mach_head, mach_tail, tolerance, alpha, backward_phi, backward_nu)
     mach_left = mach_head
     mach_right = mach_tail
     while (sp.absolute(mach_left - mach_right) >= tolerance):
         output_mach = (mach_left + mach_right)/2.0
         step = bisection_step_function(output_mach, alpha, backward_phi, backward_nu)
-        print(bisection_step_function(mach_left, alpha, backward_phi, backward_nu))
-        if step == 0: 
+        if step == 0.0: 
             break
-        if step * bisection_step_function(mach_left, alpha, backward_phi, backward_nu) < 0:
+        if step * bisection_step_function(mach_left, alpha, backward_phi, backward_nu) < tolerance:
             mach_right = output_mach
         else:
             mach_left = output_mach
-    print(output_mach)
     mu = calc_mu_from_Mach(output_mach)
+    print('dit wordt een output', output_mach)
     phi = mu - alpha
-    return output_mach, phi, mu
+    return output_mach, phi
         
         
     
@@ -91,52 +91,45 @@ def bisection_method(mach_head, mach_tail, tolerance, alpha, backward_phi, backw
 # Iteration parameters
 # =============================================================================
 characteristics = 10
-mach_array = sp.zeros([characteristics,2])
-phi_array = sp.zeros([characteristics,2])
-mu_array = sp.zeros([characteristics,2])
-mach_array[0] = mach_exit
-phi_array[0] = phi_exit
-mu_array[0] = calc_mu_from_Mach(mach_exit)
-error_tolerance = 0.001
+mach_array = sp.zeros([characteristics, characteristics])
+phi_array = sp.zeros([characteristics, characteristics])
+mu_array = sp.zeros([characteristics, characteristics])
+# =============================================================================
+# mu_array[0] = calc_mu_from_Mach(mach_exit)
+# =============================================================================
+error_tolerance = 0.0001
 
 # =============================================================================
 # Necessary variables to perform iteration
 # =============================================================================
-mach_B = sp.sqrt((1-2**(-(gamma-1)/gamma))/((gamma-1)/2) + mach_exit**2)
+mach_B = sp.sqrt(2 / (gamma-1) * (2**((gamma - 1) / gamma) * (1 + (gamma-1) / 2 * mach_exit**2) -1))
 phi_B = calc_forward_phi_gamma_plus(calc_Prandtl_Meyer_from_Mach(mach_exit), phi_exit, calc_Prandtl_Meyer_from_Mach(mach_B))
-delta_alpha = calc_alpha(mach_B, phi_B) - calc_alpha(mach_exit, phi_exit)
 alpha_0 =  calc_alpha(mach_exit, phi_exit)
-print(sp.arange(
-        alpha_0,
-        alpha_0 + delta_alpha + delta_alpha / (characteristics - 1), 
-        delta_alpha / characteristics
-    ))
+delta_alpha = calc_alpha(mach_B, phi_B) - alpha_0
+
+N = alpha_0 + delta_alpha + delta_alpha / (characteristics) / (delta_alpha / characteristics)
+
 
 for j, alpha in enumerate(sp.arange(
         alpha_0,
-        alpha_0 + delta_alpha + delta_alpha / (characteristics - 1),
-        delta_alpha / characteristics
+        alpha_0 + delta_alpha + delta_alpha / (characteristics),
+        delta_alpha / (characteristics - 1)
     )):
-# =============================================================================
-#     print (mach_array[j - 1, 0] if j > 0 else mach_array[j, 0])
-# =============================================================================
-    nu = calc_Prandtl_Meyer_from_Mach(mach_array[j - 1, 0] if j > 0 else mach_exit)
-    print(nu)
-    mach_array[j, 0], phi_array[j, 0] = bisection_method(
-        mach_array[j - 1, 0] if j > 0 else mach_exit, 
-        mach_B, 
-        error_tolerance, 
-        alpha, 
-        phi_array[j - 1, 0] if j > 0 else phi_exit, 
-        nu    
+    if (j == 0):
+        mach_array[j, 0] = mach_exit
+        phi_array[j, 0] = phi_exit
+    else :
+        mach_array[j, 0], phi_array[j, 0] = bisection_method(
+            mach_array[j - 1, 0] if j > 0 else mach_exit,
+            mach_B, 
+            error_tolerance, 
+            alpha, 
+            phi_array[j - 1, 0] if j > 0 else phi_exit, 
+            calc_Prandtl_Meyer_from_Mach(mach_array[j - 1, 0] if j > 0 else mach_exit)
     )
     for i in sp.arange(0, j + 1, 1):
         x = 2
-        
-        
 
-print(mach_array)
-    
 
 
 # =============================================================================
@@ -161,5 +154,11 @@ print(mach_array)
 #     if (while_index == n_points):
 #         shock_occurs = True
 #         
+# =============================================================================
+
+
+
+# ==================================    Wrong method to calculate mach B===========================================
+# mach_B = sp.sqrt((1-2**(-(gamma-1)/gamma))/((gamma-1)/2) + mach_exit**2)
 # =============================================================================
 
