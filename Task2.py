@@ -34,7 +34,7 @@ nozzle_exit = sp.zeros(shape=(24,2))
 shock_occurs = False
 current_element_index  = 0
 while_index = 0
-range_x = 25
+range_x = 20
 steps_x = 10000
 x = sp.linspace(0, range_x, steps_x)
 
@@ -113,8 +113,8 @@ def bisection_method(mach_head, mach_tail, tolerance, alpha, backward_phi, backw
 def translate_angle_to_gradient(angle):
      return sp.arccos(angle)
  
-def make_linear_function(a, b, x):
-    return a * x + b
+def make_linear_function(a, b, x, correction = 0 ):
+    return a * (x - correction) + b
 
 # =============================================================================
 # Iteration parameters
@@ -128,18 +128,28 @@ gamma_minus_phi_array_ABC = sp.zeros([characteristics])
 # first intersection points complex waves
 x_intersections_BCE = sp.zeros([characteristics, characteristics])
 y_intersections_BCE = sp.zeros([characteristics, characteristics])
+
 x_intersections_DFG = sp.zeros([characteristics, characteristics])
 y_intersections_DFG = sp.zeros([characteristics, characteristics])
+
+x_intersections_HIJ = sp.zeros([characteristics, characteristics])
+y_intersections_HIJ = sp.zeros([characteristics, characteristics])
 
 # first intersection points complex waves
 complex_wave_nu_BCE = sp.zeros([characteristics, characteristics])
 complex_wave_phi_BCE = sp.zeros([characteristics, characteristics])
 complex_wave_alpha_BCE = sp.zeros([characteristics, characteristics])
 complex_wave_mu_BCE = sp.zeros([characteristics, characteristics])
+
 complex_wave_nu_DFG = sp.zeros([characteristics, characteristics])
 complex_wave_phi_DFG = sp.zeros([characteristics, characteristics])
 complex_wave_alpha_DFG = sp.zeros([characteristics, characteristics])
 complex_wave_mu_DFG = sp.zeros([characteristics, characteristics])
+
+complex_wave_nu_HIJ = sp.zeros([characteristics, characteristics])
+complex_wave_phi_HIJ = sp.zeros([characteristics, characteristics])
+complex_wave_alpha_HIJ = sp.zeros([characteristics, characteristics])
+complex_wave_mu_HIJ = sp.zeros([characteristics, characteristics])
 
 
 
@@ -193,9 +203,9 @@ for j in sp.arange(0, characteristics, 1):
         if i == j:
             complex_wave_nu_DFG[i][j] =  calc_Prandtl_Meyer_from_Mach(mach_B)
             if i == 0:
-                complex_wave_phi_DFG[i][j] = complex_wave_phi_BCE[j][-1] - complex_wave_nu_DFG[i][j] + complex_wave_nu_BCE[j][-1]
+                complex_wave_phi_DFG[i][j] = complex_wave_phi_BCE[j][-1] - complex_wave_nu_BCE[j][-1] + complex_wave_nu_DFG[i][j]
             else:
-                complex_wave_phi_DFG[i][j] = complex_wave_phi_DFG[i-1][j] - complex_wave_nu_DFG[i][j] + complex_wave_nu_DFG[i-1][j]
+                complex_wave_phi_DFG[i][j] = complex_wave_phi_DFG[i-1][j]  - complex_wave_nu_DFG[i-1][j] + complex_wave_nu_DFG[i][j]
         elif i == 0 :
             complex_wave_nu_DFG[i][j] = 0.5 * (complex_wave_nu_BCE[j][-1] + complex_wave_nu_DFG[i][j-1]) + 0.5 * (complex_wave_phi_DFG[i][j-1] - complex_wave_phi_BCE[j][-1])
             complex_wave_phi_DFG[i][j] = 0.5 * (complex_wave_phi_BCE[j][-1] + complex_wave_phi_DFG[i][j-1]) + 0.5 * (complex_wave_nu_DFG[i][j-1] - complex_wave_nu_BCE[j][-1])
@@ -205,8 +215,21 @@ for j in sp.arange(0, characteristics, 1):
         complex_wave_mu_DFG[i][j], mach = find_mu_from_nu(complex_wave_nu_DFG[i][j], mach_exit, mach_B+ 10, error_tolerance)
         complex_wave_alpha_DFG[i][j] = calc_negative_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])
 
+for j in sp.arange(0, characteristics, 1):
+    for i in sp.arange(0, j + 1, 1):
+        if i == j:
+            complex_wave_nu_HIJ[i][j] = complex_wave_nu_DFG[j][-1] + complex_wave_phi_DFG[j][-1]
+        elif i == 0:
+            complex_wave_nu_HIJ[i][j] = 0.5*(complex_wave_nu_HIJ[i][j-1] + complex_wave_nu_DFG[j][-1]) + 0.5 * (complex_wave_phi_DFG[j][-1] - complex_wave_phi_HIJ[i][j-1])
+            complex_wave_phi_HIJ[i][j] = 0.5*(complex_wave_phi_HIJ[i][j-1] + complex_wave_phi_DFG[j][-1]) + 0.5 * (complex_wave_nu_DFG[j][-1] - complex_wave_nu_HIJ[i][j-1])
+        else:
+            complex_wave_nu_HIJ[i][j] = 0.5*(complex_wave_nu_HIJ[i][j-1] + complex_wave_nu_HIJ[i-1][j]) + 0.5 * (complex_wave_phi_HIJ[i-1][j] - complex_wave_phi_HIJ[i][j-1])
+            complex_wave_phi_HIJ[i][j] = 0.5*(complex_wave_phi_HIJ[i][j-1] + complex_wave_phi_HIJ[i-1][j]) + 0.5 * (complex_wave_nu_HIJ[i-1][j] - complex_wave_nu_HIJ[i][j-1])
+        complex_wave_mu_HIJ[i][j], mach = find_mu_from_nu(complex_wave_nu_HIJ[i][j], mach_exit, mach_B+ 10, error_tolerance)
+        complex_wave_alpha_HIJ[i][j] = calc_positive_slope(complex_wave_nu_HIJ[i][j], complex_wave_phi_DFG[i][j])
+
 # =============================================================================
-# Finding characteristic intersections ABC
+# Finding characteristic intersections BCE
 # =============================================================================
 gammas = sp.zeros([characteristics,len(x)])
 jet_boundary = height + sp.tan(degrees_to_radians(phi_B)) * x
@@ -214,11 +237,8 @@ pl.figure()
 #pl.plot(x, jet_boundary)
 for i in sp.arange(0, characteristics, 1):
     for j in sp.arange(i, characteristics, 1):
-        
         positive_slope = 0
         negative_slope = 0
-        diff_slopes_negative = 0
-        diff_slopes_positive = 0
         if i == 0:
             #incoming_characteristic = height - sp.tan(calc_alpha(degrees_to_radians(calc_mu_from_Mach(gamma_minus_mach_array_ABC[j])), degrees_to_radians(gamma_minus_phi_array_ABC[j]))) * x
             negative_slope = calc_negative_slope(calc_mu_from_Mach(gamma_minus_mach_array_ABC[j]), gamma_minus_phi_array_ABC[j])
@@ -228,7 +248,7 @@ for i in sp.arange(0, characteristics, 1):
                 reflected_characteristic = 0 * x
             else: 
                 prev_x = x_intersections_BCE[i][j-1]
-                positive_slope = calc_positive_slope(complex_wave_mu_BCE[i][j-1], complex_wave_phi_BCE[i][j-1])
+                positive_slope = calc_positive_slope(complex_wave_mu_BCE[i][j], complex_wave_phi_BCE[i][j])
                 diff_slopes_positive = y_intersections_BCE[i][j-1] - positive_slope * x_intersections_BCE[i][j-1]
                 reflected_characteristic = positive_slope * x + diff_slopes_positive 
         else:
@@ -236,57 +256,53 @@ for i in sp.arange(0, characteristics, 1):
             if j == i:
                 positive_slope = 0
             else:
-                positive_slope = calc_positive_slope(complex_wave_mu_BCE[i][j-1], complex_wave_phi_BCE[i][j-1])
-                
-            diff_slopes_negative = y_intersections_BCE[i-1][j] - negative_slope * x_intersections_BCE[i-1][j]
-            incoming_characteristic = y_intersections_BCE[i-1][j] + negative_slope * x
-            diff_slopes_positive = y_intersections_BCE[i][j-1] - positive_slope * x_intersections_BCE[i][j-1]
-            reflected_characteristic = y_intersections_BCE[i][j-1] + positive_slope * x
+                positive_slope = calc_positive_slope(complex_wave_mu_BCE[i][j], complex_wave_phi_BCE[i][j])
+
+            incoming_characteristic = y_intersections_BCE[i-1][j] + negative_slope * (x - x_intersections_BCE[i-1][j])
+            reflected_characteristic = y_intersections_BCE[i][j-1] + positive_slope * (x - x_intersections_BCE[i][j-1])
+            #pl.plot(x, reflected_characteristic)
         y_idx = sp.argwhere(sp.diff(sp.sign(incoming_characteristic - reflected_characteristic))).flatten()
         y_intersections_BCE[i][j] = reflected_characteristic[y_idx]
         
         if i > 0:
-            x_intersections_BCE[i][j] = x_intersections_BCE[i-1][j] + x[y_idx]
+            x_intersections_BCE[i][j] = x[y_idx] #x_intersections_BCE[i-1][j] + x[y_idx]
         else: 
             x_intersections_BCE[i][j] = x[y_idx]
             
 
 # =============================================================================
-#       Finding the arrays to plot the characteristics of ABC
+#       Finding the arrays to plot the characteristics of BCE
 # =============================================================================
         x_idx = sp.where(x >= x_intersections_BCE[i][j])
         if i ==0 : #first wave intersection
             gammas[j][:y_idx[0]]= height + negative_slope * x[:y_idx[0]] 
             prev_x_idx_reflected = sp.where(x >= x_intersections_BCE[i][j-1])
             if j > 0:
-                gammas[i][prev_x_idx_reflected[0][0]:x_idx[0][0] + 1]= y_intersections_BCE[i][j-1] + positive_slope * (x[prev_x_idx_reflected[0][0]:x_idx[0][0] + 1] - x[prev_x_idx_reflected[0][0]])
+                gammas[i][prev_x_idx_reflected[0][0]:] = y_intersections_BCE[i][j-1] + positive_slope * (x[prev_x_idx_reflected[0][0]:] - x[prev_x_idx_reflected[0][0]])
 
         elif (j == i): #intersection with x-axis
             prev_x_idx = sp.where(x >= x_intersections_BCE[i-1][j])
-            gammas[j][prev_x_idx[0][0]:x_idx[0][0] +1] = y_intersections_BCE[i-1][j] + negative_slope * (x[prev_x_idx[0][0]:x_idx[0][0] +1] - x[prev_x_idx[0][0]])
+            gammas[j][prev_x_idx[0][0]:] = y_intersections_BCE[i-1][j] + negative_slope * (x[prev_x_idx[0][0]:] - x[prev_x_idx[0][0]])
 
         else:
             prev_x_idx = sp.where(x >= x_intersections_BCE[i-1][j])
-            idx = sp.where(x >= x_intersections_BCE[i][j])
             prev_x_idx_reflected = sp.where(x >= x_intersections_BCE[i][j-1])
-            gammas[j][prev_x_idx[0][0]:x_idx[0][0] +1]= y_intersections_BCE[i-1][j] + negative_slope * (x[prev_x_idx[0][0]:x_idx[0][0] + 1] - x[prev_x_idx[0][0]])
-            gammas[i][prev_x_idx_reflected[0][0]:x_idx[0][0] + 1]= y_intersections_BCE[i][j-1] + positive_slope * (x[prev_x_idx_reflected[0][0]:x_idx[0][0] + 1] - x[prev_x_idx_reflected[0][0]])
-        
-    if i == characteristics -1:
-        pl.plot(x, gammas[i], '-', color="blue")
-    elif i == 4:
-        pl.plot(x, gammas[i], '--', color="blue")
+            idx = sp.where(x >= x_intersections_BCE[i][j])
+            gammas[j][prev_x_idx[0][0]:]= y_intersections_BCE[i-1][j] + negative_slope * (x[prev_x_idx[0][0]:] - x[prev_x_idx[0][0]])
+            gammas[i][prev_x_idx_reflected[0][0]:]= y_intersections_BCE[i][j-1] + positive_slope * (x[prev_x_idx_reflected[0][0]:] - x[prev_x_idx_reflected[0][0]])
+
+
 # =============================================================================
 # Finding characteristic intersections DFG
 # =============================================================================
 for i in sp.arange(0, characteristics, 1):
     for j in sp.arange(i, characteristics, 1):
+        diff_slopes_positive = 0 
+        diff_slopes_negative = 0
         if i == 0:
-            #incoming_characteristic = height - sp.tan(calc_alpha(degrees_to_radians(calc_mu_from_Mach(gamma_minus_mach_array_ABC[j])), degrees_to_radians(gamma_minus_phi_array_ABC[j]))) * x
-            #print(complex_wave_alpha_BCE[j][-1], y_intersections_BCE[j][-1])
             diff_slopes = y_intersections_DFG[i][j-1] - complex_wave_alpha_BCE[j][-1] * x_intersections_DFG[i][j-1]
             index_x_prev_wave = sp.where(x >= x_intersections_DFG[i][j-1])
-            incoming_characteristic = make_linear_function(complex_wave_alpha_BCE[j][-1], y_intersections_BCE[j][-1], x - x_intersections_BCE[j][-1])
+            incoming_characteristic = make_linear_function(complex_wave_alpha_BCE[j][-1], y_intersections_BCE[j][-1], x, x_intersections_BCE[j][-1])
             positive_slope = calc_positive_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])
             negative_slope = calc_negative_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])
             if j == i:
@@ -294,78 +310,144 @@ for i in sp.arange(0, characteristics, 1):
             else: 
                 prev_x = x_intersections_DFG[i][j-1]
                 negative_slope = calc_negative_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])
-                diff_slopes = y_intersections_DFG[i][j-1] - negative_slope * x_intersections_DFG[i][j-1]
-                reflected_characteristic = make_linear_function(negative_slope, diff_slopes, x)
+                diff_slopes_negative = y_intersections_DFG[i][j-1] - negative_slope * x_intersections_DFG[i][j-1]
+                reflected_characteristic = make_linear_function(negative_slope, diff_slopes_negative, x, 0)
         else:
             negative_slope = calc_negative_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])
+            positive_slope = calc_positive_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])                    
             if j != i:
-                positive_slope = calc_positive_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])                    
-                diff_slopes = y_intersections_DFG[i-1][j] - positive_slope * x_intersections_DFG[i-1][j]
-                incoming_characteristic = make_linear_function(positive_slope, diff_slopes, x)
+                #positive_slope = calc_positive_slope(complex_wave_mu_DFG[i][j], complex_wave_phi_DFG[i][j])                    
+                diff_slopes_positive = y_intersections_DFG[i-1][j] - positive_slope * x_intersections_DFG[i-1][j]
+                diff_slopes_negative = y_intersections_DFG[i][j-1] - negative_slope * x_intersections_DFG[i][j-1]
+                incoming_characteristic = make_linear_function(positive_slope, diff_slopes_positive, x,  0)
+                reflected_characteristic = make_linear_function(negative_slope, diff_slopes_negative, x, 0)
             else: 
-                incoming_characteristic: jet_boundary
+                reflected_characteristic= jet_boundary
+                diff_slopes_positive = y_intersections_DFG[i-1][j] - positive_slope * x_intersections_DFG[i-1][j]
+                incoming_characteristic = make_linear_function(positive_slope, diff_slopes_positive, x,  0)
                 
-            diff_slopes = y_intersections_DFG[i][j-1] - negative_slope * x_intersections_DFG[i][j-1]
-            reflected_characteristic = make_linear_function(negative_slope, y_intersections_DFG[i-1][j], x)
-
         y_idx = sp.argwhere(sp.diff(sp.sign(reflected_characteristic - incoming_characteristic))).flatten()
-        #spl.plot(x, incoming_characteristic, '-.')
-        
         y_intersections_DFG[i][j] = incoming_characteristic[y_idx]
+
         if i > 0:
-            x_intersections_DFG[i][j] = x_intersections_DFG[i-1][j] + x[y_idx]
+            x_intersections_DFG[i][j] = x[y_idx]
         else: 
-            x_intersections_DFG[i][j] = x_intersections_BCE[j][-1] + x[y_idx]
-        if (i == 0):
-            #pl.plot(x[index_x_prev_wave[0][0]:], reflected_characteristic[index_x_prev_wave[0][0]:],'-')
-            pl.plot(x, reflected_characteristic,'-')
-            pl.plot(x, incoming_characteristic, '--')
-            pl.plot(x_intersections_DFG, y_intersections_DFG, 'x', color="red")
-            break
+            x_intersections_DFG[i][j] = x[y_idx]
 
 # =============================================================================
 #       Finding the arrays to plot the characteristics DFG
 # =============================================================================
+
         x_idx = sp.where(x >= x_intersections_DFG[i][j])
         if i ==0 : #first wave intersection
             prev_wave_x_idx = sp.where(x >= x_intersections_BCE[j][-1])
             prev_x_idx_reflected = sp.where(x >= x_intersections_DFG[i][j-1])
-            gammas[j][prev_wave_x_idx[0][0]:x_idx[0][0]]= y_intersections_BCE[i][j-1]  + positive_slope * x[prev_wave_x_idx[0][0]:x_idx[0][0]]
+            gammas[j][prev_wave_x_idx[0][0]:x_idx[0][0]]= y_intersections_BCE[j][-1] + positive_slope * (x[prev_wave_x_idx[0][0]:x_idx[0][0]] - x[prev_wave_x_idx[0][0]])
             if j > 0:
-                gammas[j][prev_wave_x_idx[0][0]:x_idx[0][0]]= y_intersections_BCE[i][j-1]  + positive_slope * x[prev_wave_x_idx[0][0]:x_idx[0][0]]
-                gammas[i][prev_x_idx_reflected[0][0]:x_idx[0][0] + 1]= y_intersections_DFG[i][j-1] + complex_wave_alpha_BCE[j][-1] * (x[prev_x_idx_reflected[0][0]:x_idx[0][0] + 1] - x[prev_x_idx_reflected[0][0]])
-            if j == 0:
-                diff_slopes = jet_boundary[x_idx[0][0]] - ( x[x_idx[0][0]] * sp.tan(degrees_to_radians(complex_wave_phi_DFG[i][j])) + 1)
-                jet_boundary[x_idx[0][0]:] = height + sp.tan(degrees_to_radians(complex_wave_phi_DFG[i][j])) * x[x_idx[0][0]:] + diff_slopes
-                pl.plot(x, jet_boundary)
+                gammas[j][prev_wave_x_idx[0][0]:x_idx[0][0]]= y_intersections_BCE[j][-1]  + complex_wave_alpha_BCE[j][-1]* (x[prev_wave_x_idx[0][0]:x_idx[0][0]] - x[prev_wave_x_idx[0][0]])
+                gammas[i][prev_x_idx_reflected[0][0]:x_idx[0][0] + 1]= y_intersections_DFG[i][j-1] + negative_slope * (x[prev_x_idx_reflected[0][0]:x_idx[0][0] + 1] - x[prev_x_idx_reflected[0][0]])
+            else:
+                diff_slopes = jet_boundary[x_idx[0][0]] - x[x_idx[0][0]] * sp.tan(degrees_to_radians(complex_wave_phi_DFG[i][j]))
+                jet_boundary[x_idx[0][0]:] = sp.tan(degrees_to_radians(complex_wave_phi_DFG[i][j])) * x[x_idx[0][0]:] + diff_slopes
 
         elif (j == i): #intersection with x-axis
             prev_x_idx = sp.where(x >= x_intersections_DFG[i-1][j])
             gammas[j][prev_x_idx[0][0]:x_idx[0][0] +1]= y_intersections_DFG[i-1][j] + positive_slope * (x[prev_x_idx[0][0]:x_idx[0][0] +1] - x[prev_x_idx[0][0]])
+            diff_slopes = jet_boundary[x_idx[0][0]] - x[x_idx[0][0]] * sp.tan(degrees_to_radians(complex_wave_phi_DFG[i][j]))
+            jet_boundary[x_idx[0][0]:] = sp.tan(degrees_to_radians(complex_wave_phi_DFG[i][j])) * x[x_idx[0][0]:] + diff_slopes
 
         else:
             prev_x_idx = sp.where(x >= x_intersections_DFG[i-1][j])
             idx = sp.where(x >= x_intersections_DFG[i][j])
             prev_x_idx_reflected = sp.where(x >= x_intersections_DFG[i][j-1])
-            gammas[j][prev_x_idx[0][0]:x_idx[0][0] + 1]= y_intersections_DFG[i-1][j] + positive_slope * x[prev_x_idx[0][0]:x_idx[0][0] + 1] - negative_slope * x[prev_x_idx[0][0]]
-            gammas[i][prev_x_idx_reflected[0][0]:x_idx[0][0] + 1]= y_intersections_DFG[i][j-1] + (y_intersections_DFG[i][j] - y_intersections_DFG[i][j-1]) / (x_intersections_DFG[i][j] - x_intersections_DFG[i][j-1])  * (x[prev_x_idx_reflected[0][0]:x_idx[0][0] + 1] - x[prev_x_idx_reflected[0][0]])
+            gammas[i][prev_x_idx_reflected[0][0]:]= negative_slope * (x[prev_x_idx_reflected[0][0]:] ) + diff_slopes_negative 
+            gammas[j][prev_x_idx[0][0]:]= positive_slope * (x[prev_x_idx[0][0]:] ) + diff_slopes_positive 
 
         if j == characteristics - 1:
             gammas[i][x_idx[0][0]:]= y_intersections_DFG[i][j] + complex_wave_alpha_DFG[i][j] * (x[x_idx[0][0]:]- x[x_idx[0][0]])
-        #pl.plot(x_intersections_DFG, y_intersections_DFG, 'x', color="red")
+        pl.plot(x_intersections_DFG, y_intersections_DFG, '.', color="black")
+
+
+# =============================================================================
+# Finding the characteristic intersections in HIJ
+# =============================================================================
+for i in sp.arange(0, characteristics, 1):
+    for j in sp.arange(i, characteristics, 1):
+        
+        diff_slopes_positive = 0 
+        diff_slopes_negative = 0
+        positive_slope = 0
+        negative_slope = 0
+        if i == 0:
+            #incoming_characteristic = height - sp.tan(calc_alpha(degrees_to_radians(calc_mu_from_Mach(gamma_minus_mach_array_ABC[j])), degrees_to_radians(gamma_minus_phi_array_ABC[j]))) * x
+            negative_slope = complex_wave_alpha_DFG[j][-1]
+            #diff_slopes_positive = y_intersections_DFG[i-1][j] - positive_slope * x_intersections_DFG[][j]
+            diff_slopes_negative = y_intersections_DFG[j][-1] - negative_slope * x_intersections_DFG[i][j-1]
+            incoming_characteristic = diff_slopes_negative + negative_slope * x
+            
+            if j == 0:
+                reflected_characteristic = 0 * x
+            else: 
+                positive_slope = calc_positive_slope(complex_wave_mu_HIJ[i][j], complex_wave_phi_HIJ[i][j])
+                diff_slopes_positive = y_intersections_HIJ[i][j-1] - positive_slope * x_intersections_HIJ[i][j-1]
+                reflected_characteristic = positive_slope * x + diff_slopes_positive 
+        else:
+            negative_slope = calc_negative_slope(complex_wave_mu_HIJ[i-1][j], complex_wave_phi_HIJ[i-1][j])
+            if j == i:
+                positive_slope = 0
+            else:
+                positive_slope = calc_positive_slope(complex_wave_mu_HIJ[i][j], complex_wave_phi_HIJ[i][j])
+
+            incoming_characteristic = y_intersections_HIJ[i-1][j] + negative_slope * (x - x_intersections_HIJ[i-1][j])
+            reflected_characteristic = y_intersections_HIJ[i][j-1] + positive_slope * (x - x_intersections_HIJ[i][j-1])
+            #pl.plot(x, reflected_characteristic)
+        y_idx = sp.argwhere(sp.diff(sp.sign(incoming_characteristic - reflected_characteristic))).flatten()
+        y_intersections_HIJ[i][j] = reflected_characteristic[y_idx]
+        
+        if i > 0:
+            x_intersections_HIJ[i][j] = x[y_idx] #x_intersections_HIJ[i-1][j] + x[y_idx]
+        else: 
+            x_intersections_HIJ[i][j] = x[y_idx]
+            
+
+# =============================================================================
+#       Finding the arrays to plot the characteristics of HIJ
+# =============================================================================
+        x_idx = sp.where(x >= x_intersections_HIJ[i][j])
+        
+        if i ==0 : #first wave intersection
+            prev_wave_x_idx = sp.where(x >= x_intersections_DFG[j][-1])
+            gammas[j][prev_wave_x_idx[0][0]:y_idx[0][0]]= diff_slopes_negative + negative_slope * x[prev_wave_x_idx[0][0]:y_idx[0][0]] 
+            prev_x_idx_reflected = sp.where(x >= x_intersections_HIJ[i][j-1])
+
+            if j > 0:
+                prev_x_idx_reflected = sp.where(x >= x_intersections_HIJ[i][j-1])
+                gammas[i][prev_x_idx_reflected[0][0]:] = y_intersections_HIJ[i][j-1] + positive_slope * (x[prev_x_idx_reflected[0][0]:] - x[prev_x_idx_reflected[0][0]])
+
+        elif (j == i): #intersection with x-axis
+            prev_x_idx = sp.where(x >= x_intersections_HIJ[i-1][j])
+            gammas[j][prev_x_idx[0][0]:] = y_intersections_HIJ[i-1][j] + negative_slope * (x[prev_x_idx[0][0]:] - x[prev_x_idx[0][0]])
+
+        else:
+            prev_x_idx = sp.where(x >= x_intersections_HIJ[i-1][j])
+            prev_x_idx_reflected = sp.where(x >= x_intersections_HIJ[i][j-1])
+            idx = sp.where(x >= x_intersections_HIJ[i][j])
+            gammas[j][prev_x_idx[0][0]:]= y_intersections_HIJ[i-1][j] + negative_slope * (x[prev_x_idx[0][0]:] - x[prev_x_idx[0][0]])
+            gammas[i][prev_x_idx_reflected[0][0]:]= y_intersections_HIJ[i][j-1] + positive_slope * (x[prev_x_idx_reflected[0][0]:] - x[prev_x_idx_reflected[0][0]])
+
+
 
 # =============================================================================
 #           Plotting the characteristics over the entire domain
 # =============================================================================
-# =============================================================================
-#         if i == 0 or i == characteristics -1:
-#             pl.plot(x, gammas[i], '-', color="blue")
-#         else:
-#             pl.plot(x, gammas[i], '--', color="blue")
-# =============================================================================
+for i in sp.arange(0, characteristics, 1):
+    if i == 0 or i == characteristics -1:
+        pl.plot(x, gammas[i], '-', color="blue")
+    else:
+        pl.plot(x, gammas[i], '--', color="blue")
 pl.plot(x, jet_boundary, '--', color="red")
-intersections_masked = pl.ma.masked_where((x_intersections_BCE<0.1)&(x_intersections_BCE>-0.1), y_intersections_BCE)
-pl.plot(x_intersections_BCE,intersections_masked, '.', color="black")
+#intersections_masked = pl.ma.masked_where((x_intersections_BCE<0.1)&(x_intersections_BCE>-0.1), y_intersections_BCE)
+#pl.plot(x_intersections_BCE,intersections_masked, '.', color="black")
 
 # =============================================================================
 #       Plot characteristics for DFG
