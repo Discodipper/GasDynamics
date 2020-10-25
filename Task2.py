@@ -9,6 +9,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import matplotlib.pylab as pl
+import matplotlib.patches as ptch
 
 
 # =============================================================================
@@ -31,7 +32,7 @@ P_tot = 1                                   #N/m^2
 # Iteration variables
 # =============================================================================
 n_characteristics = 10                      #number of points at the exit diameter
-range_x = 15                                #limit of x
+range_x = 14                                #limit of x
 steps_x = 10000                             #steps covering domain
 x = sp.linspace(0, range_x, steps_x)        #all the x values for the steps
 
@@ -64,6 +65,11 @@ def calc_forward_phi_gamma_plus(nu_backward, phi_backward, nu_forward):
 
 def find_mach_for_prandtl_meyer(mach, nu):
     return calc_Prandtl_Meyer_from_Mach(mach) - nu
+
+def zero_to_nan(values):
+    """Replace every 0 with 'nan' and return a copy."""
+    return [float('nan') if x==0 else x for x in values]
+
     
 def find_mu_from_nu(nu, mach_head, mach_tail, tolerance):
     mach_left = mach_head
@@ -523,29 +529,40 @@ def find_streamline(starting_height):
 # =============================================================================
 #           Plotting the n_characteristics over the entire domain
 # =============================================================================
-def create_plot(streamlines):
-    pl.figure(1)
-    pl.ylabel('y-direction')
-    pl.xlabel('x-direction')
-    pl.title('Jet flow downstream')
+debugVar = sp.ndarray([1, n_characteristics])
+def create_plot(streamlines= []):
+    fig,ax = plt.subplots(1)
+    plt.ylabel('y-direction')
+    plt.xlabel('x-direction')
+    plt.title('Jet flow downstream')
     for i in sp.arange(0, n_characteristics, 1):
         if i == 0 or i == n_characteristics -1:
-            pl.plot(x, gammas[i], '-', color="blue")
+            plt.plot(x, gammas[i], '-', color="blue")
         else:
-            pl.plot(x, gammas[i], '--', color="blue")
-    pl.plot(x, jet_boundary, '--', color="red")
-    
+            plt.plot(x, gammas[i], '--', color="blue")
+    plt.plot(x, jet_boundary, '--', color="red")
+
+
+    pc = ax.pcolormesh(x_intersections_HIJ.astype('float'), y_intersections_HIJ.astype('float'), complex_wave_mach_HIJ.astype('float'), vmin=mach_exit) 
+    print(sp.rot90(sp.fliplr(x_intersections_HIJ)))
+    fig.colorbar(pc)
+    ax.pcolormesh(x_intersections_BCE.astype('float'), y_intersections_BCE.astype('float'), complex_wave_mach_BCE.astype('float'), vmin=mach_exit) 
+    print(sp.rot90(sp.fliplr(x_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(y_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(complex_wave_mach_DFG.astype('float'))))
+    ax.pcolormesh(sp.rot90(sp.fliplr(x_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(y_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(complex_wave_mach_DFG.astype('float'))), vmin=mach_exit)
+
     if(len(streamlines) > 0):
         for i in sp.arange(0, len(streamlines), 1):
-            pl.plot(x, streamlines[i][0], color="green")
-        pl.figure(2)
-        pl.ylabel('P/P_T')
-        pl.xlabel('x-direction')
-        pl.title('Local pressure')
-        pl.ylim(bottom=0, top=0.14)
+            plt.plot(x, streamlines[i][0], color="green")
+        plt.show()
+        fig,ax = plt.subplots(1)
+        plt.ylabel('P/P_T')
+        plt.xlabel('x-direction')
+        plt.title('Local pressure')
+        plt.ylim(bottom=0, top=0.04)
         for i in sp.arange(0, len(streamlines), 1):
-            pl.plot(streamlines[i][2], streamlines[i][1])
-        pl.legend(['Centre-line', 'H/2'])
-    pl.show()
+            plt.plot(streamlines[i][2], streamlines[i][1])
+        plt.legend(['Centre-line', 'H/2'])
+    plt.show()
     
-create_plot([find_streamline(0), find_streamline(height/2)])
+create_plot()
+#create_plot([find_streamline(0), find_streamline(height/2)])
