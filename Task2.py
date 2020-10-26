@@ -6,10 +6,12 @@ Created on Wed Sep 23 20:40:01 2020
 """
 
 import scipy as sp
+import scipy.io as io
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 import matplotlib.pylab as pl
 import matplotlib.patches as ptch
+import matplotlib.cm as cm
 
 
 # =============================================================================
@@ -20,7 +22,7 @@ gamma = 7/5
 # =============================================================================
 # Initial variables
 # =============================================================================
-mach_exit = 2                               #-
+mach_exit = 2.5                               #-
 exit_pressore_over_ambient_pressure = 2     #-
 phi_exit = 0                                #degrees
 ambient_pressure = 1225                     #N/m
@@ -31,8 +33,8 @@ P_tot = 1                                   #N/m^2
 # =============================================================================
 # Iteration variables
 # =============================================================================
-n_characteristics = 10                      #number of points at the exit diameter
-range_x = 14                                #limit of x
+n_characteristics = 100                      #number of points at the exit diameter
+range_x = 18                                #limit of x
 steps_x = 10000                             #steps covering domain
 x = sp.linspace(0, range_x, steps_x)        #all the x values for the steps
 
@@ -530,6 +532,105 @@ def find_streamline(starting_height):
 #           Plotting the n_characteristics over the entire domain
 # =============================================================================
 debugVar = sp.ndarray([1, n_characteristics])
+final_color_array_x = []
+
+# =============================================================================
+# Work-around method to create heat mapping for plot
+# =============================================================================
+def create_heat_mapping(fig, ax):
+    # find lowest and highest mach values
+    vmin = mach_exit
+    vmax = complex_wave_mach_BCE[sp.where(complex_wave_mach_BCE == complex_wave_mach_BCE.max())][0]
+    
+    # work-around for DFG
+    temp_array_x = []
+    temp_array_y = []
+    temp_array_mach = []
+    for i in sp.arange(0, n_characteristics-1, 1):
+        for j in sp.arange(i, n_characteristics-1, 1):
+            if x_intersections_DFG[i][j] !=0 and x_intersections_DFG[i + 1][j] !=0 and x_intersections_DFG[i + 1][j + 1] !=0:
+                temp_array_x = [[x_intersections_DFG[i][j], x_intersections_DFG[i + 1][j]], [x_intersections_DFG[i][j+1], x_intersections_DFG[i + 1][j+1]]]
+                temp_array_y = [[y_intersections_DFG[i][j], y_intersections_DFG[i + 1][j]], [y_intersections_DFG[i][j + 1], y_intersections_DFG[i + 1][j + 1]]]
+                temp_array_mach = [[complex_wave_mach_DFG[i][j], complex_wave_mach_DFG[i + 1][j]], [complex_wave_mach_DFG[i][j + 1], complex_wave_mach_DFG[i + 1][j + 1]]]
+                ax.pcolormesh(temp_array_x, temp_array_y, temp_array_mach, vmax = vmax, vmin = vmin)
+    
+    # work-around for BCE to DFG
+    BCE_stack_array_x = []
+    BCE_stack_array_y = []
+    BCE_stack_array_mach = []
+    for i in sp.arange(0, n_characteristics, 1):
+        if len(BCE_stack_array_x) == 0:
+            BCE_stack_array_x = [x_intersections_DFG[i][i]]
+            BCE_stack_array_y = [y_intersections_DFG[i][i]]
+            BCE_stack_array_mach = [complex_wave_mach_DFG[i][i]]
+        else :
+            BCE_stack_array_x = sp.vstack((BCE_stack_array_x, x_intersections_DFG[0][i]))
+            BCE_stack_array_y = sp.vstack((BCE_stack_array_y, y_intersections_DFG[0][i]))
+            BCE_stack_array_mach = sp.vstack((BCE_stack_array_mach, complex_wave_mach_DFG[0][i]))
+    
+    # work-around for DFG to HIJ
+    DFG_stack_array_x = []
+    DFG_stack_array_y = []
+    DFG_stack_array_mach = []
+    for i in sp.arange(0, n_characteristics, 1):
+        if len(DFG_stack_array_x) == 0:
+            DFG_stack_array_x = [x_intersections_DFG[i][-1]]
+            DFG_stack_array_y = [y_intersections_DFG[i][-1]]
+            DFG_stack_array_mach = [complex_wave_mach_DFG[i][-1]]
+        else :
+            DFG_stack_array_x = sp.hstack((DFG_stack_array_x, x_intersections_DFG[i][-1]))
+            DFG_stack_array_y = sp.hstack((DFG_stack_array_y, y_intersections_DFG[i][-1]))
+            DFG_stack_array_mach = sp.hstack((DFG_stack_array_mach, complex_wave_mach_DFG[i][-1]))
+    pc = ax.pcolormesh(sp.hstack((x_intersections_BCE, BCE_stack_array_x)), sp.hstack((y_intersections_BCE, BCE_stack_array_y)), sp.hstack((complex_wave_mach_BCE, BCE_stack_array_mach)), vmax = vmax, vmin = vmin)     
+    ax.pcolormesh(sp.vstack((DFG_stack_array_x, x_intersections_HIJ)), sp.vstack((DFG_stack_array_y, y_intersections_HIJ)), sp.vstack((DFG_stack_array_mach, complex_wave_mach_HIJ)), vmax = vmax, vmin = vmin) 
+    
+    first_gamma_wave_x = []
+    first_gamma_wave_y = []
+    first_gamma_wave_mach = []
+    for i in sp.arange(0, n_characteristics, 1 ):
+        if i == 0:
+            first_gamma_wave_x = sp.vstack((0, x_intersections_BCE[0][i])) #[0, x_intersections_BCE[0][i]]
+            first_gamma_wave_y = sp.vstack((height, y_intersections_BCE[0][i]))#[height, y_intersections_BCE[0][i]]
+            first_gamma_wave_mach = sp.vstack((gamma_minus_mach_array_ABC[i], gamma_minus_mach_array_ABC[i])) #[mach_exit, complex_wave_mach_BCE[0][i]]
+        else :
+            first_gamma_wave_x  = sp.hstack((first_gamma_wave_x, sp.vstack((0, x_intersections_BCE[0][i]))))
+            first_gamma_wave_y  = sp.hstack((first_gamma_wave_y, sp.vstack((height, y_intersections_BCE[0][i]))))
+            first_gamma_wave_mach  = sp.hstack((first_gamma_wave_mach, sp.vstack((gamma_minus_mach_array_ABC[i], gamma_minus_mach_array_ABC[i]))))
+            
+    ax.pcolormesh(first_gamma_wave_x, first_gamma_wave_y, first_gamma_wave_mach, vmax = vmax, vmin = vmin)
+    
+    x_uniform_area_1 = [[0, 0], [x_intersections_BCE[0][0], x_intersections_BCE[0][0]]]
+    y_uniform_area_1 = [[0, 1], [0, 0]]
+    mach_uniform_area_1 = [[mach_exit, mach_exit], [mach_exit, mach_exit]]
+    ax.pcolormesh(x_uniform_area_1, y_uniform_area_1, mach_uniform_area_1, vmax = vmax, vmin = vmin)
+    
+    x_uniform_area_2 = [[x_intersections_BCE[-1][-1], x_intersections_DFG[0][-1]], [x_intersections_BCE[-1][-1], x_intersections_HIJ[0][0]]]
+    y_uniform_area_2 = [[0, y_intersections_DFG[0][-1]], [0, 0]]
+    mach_uniform_area_2 = [[vmax, complex_wave_mach_DFG[0][-1]], [vmax, complex_wave_mach_HIJ[0][0]]]
+    ax.pcolormesh(x_uniform_area_2, y_uniform_area_2, mach_uniform_area_2, vmax = vmax, vmin = vmin)
+    
+    x_uniform_area_3 = [[0, x_intersections_BCE[0][-1]], [x_intersections_DFG[0][0], x_intersections_DFG[0][0]]]
+    y_uniform_area_3 = [[height, y_intersections_BCE[0][-1]], [y_intersections_DFG[0][0], y_intersections_DFG[0][0]]]
+    mach_uniform_area_3 = [[complex_wave_mach_BCE[0][-1], complex_wave_mach_BCE[0][-1]], [complex_wave_mach_DFG[0][0], complex_wave_mach_DFG[0][0]]]
+    ax.pcolormesh(x_uniform_area_3, y_uniform_area_3, mach_uniform_area_3, vmax = vmax, vmin = vmin)
+    
+    last_idx = sp.where(x >= x_intersections_HIJ[0][-1])
+    upper_right_y = jet_boundary[last_idx[0][0]]
+    print(upper_right_y, last_idx)
+    
+    x_uniform_area_4 = [[x_intersections_DFG[-1][-1], x_intersections_HIJ[0][-1]], [x_intersections_HIJ[0][-1], x_intersections_HIJ[0][-1]]]
+    y_uniform_area_4 = [[y_intersections_DFG[-1][-1], upper_right_y], [y_intersections_HIJ[0][-1], y_intersections_HIJ[0][-1]]]
+    mach_uniform_area_4 = [[complex_wave_mach_DFG[-1][-1], complex_wave_mach_DFG[-1][-1]], [complex_wave_mach_DFG[-1][-1], complex_wave_mach_DFG[-1][-1]]]
+    ax.pcolormesh(x_uniform_area_4, y_uniform_area_4, mach_uniform_area_4, vmax = vmax, vmin = vmin)
+    
+    for i in sp.arange(0, n_characteristics - 1, 1):
+        x_uniform_area_i = [[x_intersections_DFG[i][i], x_intersections_DFG[i][i+1]], [x_intersections_DFG[i+1][i+1], x_intersections_DFG[i+1][i+1]]]
+        y_uniform_area_i = [[y_intersections_DFG[i][i], y_intersections_DFG[i][i+1]], [y_intersections_DFG[i+1][i+1], y_intersections_DFG[i+1][i+1]]]
+        mach_uniform_area_i = [[complex_wave_mach_DFG[i][i], complex_wave_mach_DFG[i][i+1]], [complex_wave_mach_DFG[i+1][i+1], complex_wave_mach_DFG[i+1][i+1]]]
+        ax.pcolormesh(x_uniform_area_i, y_uniform_area_i, mach_uniform_area_i, vmax = vmax, vmin = vmin)    
+    
+    fig.colorbar(pc)
+    
 def create_plot(streamlines= []):
     fig,ax = plt.subplots(1)
     plt.ylabel('y-direction')
@@ -542,19 +643,11 @@ def create_plot(streamlines= []):
             plt.plot(x, gammas[i], '--', color="blue")
     plt.plot(x, jet_boundary, '--', color="red")
 
-
-    pc = ax.pcolormesh(x_intersections_HIJ.astype('float'), y_intersections_HIJ.astype('float'), complex_wave_mach_HIJ.astype('float'), vmin=mach_exit) 
-    print(sp.rot90(sp.fliplr(x_intersections_HIJ)))
-    fig.colorbar(pc)
-    ax.pcolormesh(x_intersections_BCE.astype('float'), y_intersections_BCE.astype('float'), complex_wave_mach_BCE.astype('float'), vmin=mach_exit) 
-    print(sp.rot90(sp.fliplr(x_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(y_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(complex_wave_mach_DFG.astype('float'))))
-    ax.pcolormesh(sp.rot90(sp.fliplr(x_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(y_intersections_DFG.astype('float'))), sp.rot90(sp.fliplr(complex_wave_mach_DFG.astype('float'))), vmin=mach_exit)
-
     if(len(streamlines) > 0):
         for i in sp.arange(0, len(streamlines), 1):
             plt.plot(x, streamlines[i][0], color="green")
         plt.show()
-        fig,ax = plt.subplots(1)
+        plt.subplots(1)
         plt.ylabel('P/P_T')
         plt.xlabel('x-direction')
         plt.title('Local pressure')
@@ -564,5 +657,8 @@ def create_plot(streamlines= []):
         plt.legend(['Centre-line', 'H/2'])
     plt.show()
     
-create_plot()
-#create_plot([find_streamline(0), find_streamline(height/2)])
+    return fig, ax
+    
+#fig, ax = create_plot([find_streamline(0), find_streamline(height/2)])
+fig, ax = create_plot()
+create_heat_mapping(fig, ax)
