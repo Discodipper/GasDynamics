@@ -5,6 +5,9 @@ Created on Wed Sep 23 20:40:01 2020
 @author: Thomas Lokken 4449282
 """
 
+import datetime
+begin_time = datetime.datetime.now()
+
 import scipy as sp
 import scipy.io as io
 import matplotlib.pyplot as plt
@@ -22,7 +25,7 @@ gamma = 7/5
 # =============================================================================
 # Initial variables
 # =============================================================================
-mach_exit = 2.5                               #-
+mach_exit = 2                               #-
 exit_pressore_over_ambient_pressure = 2     #-
 phi_exit = 0                                #degrees
 ambient_pressure = 1225                     #N/m
@@ -33,8 +36,8 @@ P_tot = 1                                   #N/m^2
 # =============================================================================
 # Iteration variables
 # =============================================================================
-n_characteristics = 100                      #number of points at the exit diameter
-range_x = 18                                #limit of x
+n_characteristics = 25                      #number of points at the exit diameter
+range_x = 14                                #limit of x
 steps_x = 10000                             #steps covering domain
 x = sp.linspace(0, range_x, steps_x)        #all the x values for the steps
 
@@ -67,10 +70,6 @@ def calc_forward_phi_gamma_plus(nu_backward, phi_backward, nu_forward):
 
 def find_mach_for_prandtl_meyer(mach, nu):
     return calc_Prandtl_Meyer_from_Mach(mach) - nu
-
-def zero_to_nan(values):
-    """Replace every 0 with 'nan' and return a copy."""
-    return [float('nan') if x==0 else x for x in values]
 
     
 def find_mu_from_nu(nu, mach_head, mach_tail, tolerance):
@@ -531,8 +530,6 @@ def find_streamline(starting_height):
 # =============================================================================
 #           Plotting the n_characteristics over the entire domain
 # =============================================================================
-debugVar = sp.ndarray([1, n_characteristics])
-final_color_array_x = []
 
 # =============================================================================
 # Work-around method to create heat mapping for plot
@@ -636,11 +633,13 @@ def create_plot(streamlines= []):
     plt.ylabel('y-direction')
     plt.xlabel('x-direction')
     plt.title('Jet flow downstream')
-    for i in sp.arange(0, n_characteristics, 1):
-        if i == 0 or i == n_characteristics -1:
-            plt.plot(x, gammas[i], '-', color="blue")
-        else:
-            plt.plot(x, gammas[i], '--', color="blue")
+# =============================================================================
+#     for i in sp.arange(0, n_characteristics, 1):
+#         if i == 0 or i == n_characteristics -1:
+#             plt.plot(x, gammas[i], '-', color="blue")
+#         else:
+#             plt.plot(x, gammas[i], '--', color="blue")
+# =============================================================================
     plt.plot(x, jet_boundary, '--', color="red")
 
     if(len(streamlines) > 0):
@@ -662,3 +661,4 @@ def create_plot(streamlines= []):
 #fig, ax = create_plot([find_streamline(0), find_streamline(height/2)])
 fig, ax = create_plot()
 create_heat_mapping(fig, ax)
+print(datetime.datetime.now() - begin_time)
